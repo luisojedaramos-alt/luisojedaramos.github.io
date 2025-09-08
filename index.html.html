@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <title>Gestor de Provisiones de Fondos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .spinner {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .details-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+        <div class="spinner w-16 h-16 border-4 border-gray-200 rounded-full"></div>
+    </div>
+
+    <!-- Notificaciones -->
+    <div id="notification" class="fixed top-5 right-5 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg" style="transform: translateX(150%); transition: transform 0.3s ease-in-out;">
+        <!-- El mensaje se insertará aquí -->
+    </div>
+
+    <!-- Contenedor de Autenticación -->
+    <div id="auth-container" class="min-h-screen flex items-center justify-center bg-gray-100 hidden">
+        <div class="max-w-md w-full bg-white p-8 rounded-lg shadow-lg">
+            <!-- Formulario de Inicio de Sesión -->
+            <div id="login-view">
+                <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Iniciar Sesión</h2>
+                <form id="login-form" class="space-y-4">
+                    <input type="email" id="login-email" placeholder="Correo Electrónico" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <input type="password" id="login-password" placeholder="Contraseña" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-2 rounded-md hover:bg-blue-700 transition-colors">Entrar</button>
+                </form>
+                <p class="text-center text-sm text-gray-600 mt-4">
+                    ¿No tienes una cuenta? <button id="show-register-view" class="text-blue-600 hover:underline font-semibold">Regístrate</button>
+                </p>
+            </div>
+            <!-- Formulario de Registro -->
+            <div id="register-view" class="hidden">
+                <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Crear Cuenta</h2>
+                <form id="register-form" class="space-y-4">
+                    <input type="email" id="register-email" placeholder="Correo Electrónico" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <input type="password" id="register-password" placeholder="Contraseña (mínimo 6 caracteres)" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <button type="submit" class="w-full bg-green-600 text-white font-semibold py-2 rounded-md hover:bg-green-700 transition-colors">Registrar</button>
+                </form>
+                <p class="text-center text-sm text-gray-600 mt-4">
+                    ¿Ya tienes una cuenta? <button id="show-login-view" class="text-blue-600 hover:underline font-semibold">Inicia Sesión</button>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor Principal de la App -->
+    <div id="app-container" class="container mx-auto p-4 md:p-8 max-w-5xl hidden">
+        <header class="mb-6">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                 <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Gestor de Provisiones de Fondos</h1>
+                    <p id="user-email" class="text-gray-600 mt-1">Registra y controla las provisiones para cada uno de tus asuntos.</p>
+                 </div>
+                 <div class="flex items-center gap-4">
+                    <label for="year-selector" class="font-semibold">Año:</label>
+                    <select id="year-selector" class="bg-white border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+                    <button id="export-csv-btn" class="bg-gray-700 text-white font-semibold px-4 py-2 rounded-md hover:bg-gray-800 transition-colors text-sm">Exportar CSV</button>
+                    <button id="logout-btn" class="bg-red-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm">Cerrar Sesión</button>
+                 </div>
+            </div>
+        </header>
+
+        <!-- Resumen Mensual y Buscador -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="lg:col-span-2">
+                 <input type="text" id="search-input" placeholder="🔍 Buscar asunto por nombre..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-md">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-lg">Resumen Mensual</h3>
+                    <button id="toggle-summary-btn" class="text-blue-600 hover:text-blue-800 text-sm font-semibold">Ocultar</button>
+                </div>
+                <div id="summary-content" class="mt-3 space-y-2 transition-all duration-300">
+                    <!-- El resumen se cargará aquí -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario para añadir un nuevo asunto -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4">Crear Nuevo Asunto</h2>
+            <form id="add-asunto-form" class="flex flex-col sm:flex-row gap-4">
+                <input type="text" id="asunto-nombre" placeholder="Nombre o referencia del asunto" class="flex-grow w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-2 rounded-md hover:bg-blue-700 transition-colors w-full sm:w-auto">
+                    Añadir Asunto
+                </button>
+            </form>
+        </div>
+
+        <!-- Contenedor para la lista de asuntos -->
+        <div id="asuntos-container" class="space-y-6">
+            <!-- Los asuntos se cargarán aquí dinámicamente -->
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación de Eliminación -->
+    <div id="delete-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-lg shadow-xl text-center max-w-sm mx-4">
+            <h3 class="text-xl font-bold mb-4">¿Confirmar Eliminación?</h3>
+            <p class="text-gray-600 mb-6">Esta acción es irreversible y eliminará el asunto con todas sus provisiones y gastos.</p>
+            <div class="flex justify-center gap-4">
+                <button id="cancel-delete-btn" class="px-6 py-2 bg-gray-200 text-gray-800 font-semibold rounded-md hover:bg-gray-300">Cancelar</button>
+                <button id="confirm-delete-btn" class="px-6 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, arrayUnion, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { 
+            getAuth, 
+            onAuthStateChanged,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // PASO FINAL: Pega aquí el objeto de configuración de Firebase que copiaste.
+        // Reemplaza todo el bloque de "const firebaseConfig" de ejemplo con el tuyo.
+        const firebaseConfig = {
+  apiKey: "AIzaSyCi5RXaZGqNxJdbwz79T3XD3h9TAwlvU7o",
+  authDomain: "gestor-financiero-mylor.firebaseapp.com",
+  projectId: "gestor-financiero-mylor",
+  storageBucket: "gestor-financiero-mylor.firebasestorage.app",
+  messagingSenderId: "18110819954",
+  appId: "1:18110819954:web:f0aad6da58ebf2c31b9ceb"
+};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        let userId = null;
+        let asuntosCollectionRef = null;
+        let unsubscribeAsuntos = null;
+        let allAsuntos = [];
+        let selectedYear = new Date().getFullYear();
+        let asuntoIdToDelete = null;
+
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const authContainer = document.getElementById('auth-container');
+        const appContainer = document.getElementById('app-container');
+
+        const loginView = document.getElementById('login-view');
+        const registerView = document.getElementById('register-view');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const showRegisterViewBtn = document.getElementById('show-register-view');
+        const showLoginViewBtn = document.getElementById('show-login-view');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userEmailDisplay = document.getElementById('user-email');
+
+        const addAsuntoForm = document.getElementById('add-asunto-form');
+        const asuntoNombreInput = document.getElementById('asunto-nombre');
+        const asuntosContainer = document.getElementById('asuntos-container');
+        const searchInput = document.getElementById('search-input');
+        const yearSelector = document.getElementById('year-selector');
+        const toggleSummaryBtn = document.getElementById('toggle-summary-btn');
+        const summaryContent = document.getElementById('summary-content');
+        const exportCsvBtn = document.getElementById('export-csv-btn');
+        const notification = document.getElementById('notification');
+        const deleteModal = document.getElementById('delete-modal');
+        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+
+        function showNotification(message, isSuccess = false) {
+            notification.textContent = message;
+            notification.style.backgroundColor = isSuccess ? '#22c55e' : '#ef4444';
+            notification.style.transform = 'translateX(0)';
+            setTimeout(() => {
+                notification.style.transform = 'translateX(150%)';
+            }, 3000);
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                userEmailDisplay.textContent = `Sesión iniciada como: ${user.email}`;
+                authContainer.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                setupFirestoreListeners();
+            } else {
+                userId = null;
+                if (unsubscribeAsuntos) unsubscribeAsuntos();
+                asuntosContainer.innerHTML = '';
+                authContainer.classList.remove('hidden');
+                appContainer.classList.add('hidden');
+                loadingOverlay.style.display = 'none';
+            }
+        });
+        
+        showRegisterViewBtn.addEventListener('click', () => {
+            loginView.classList.add('hidden');
+            registerView.classList.remove('hidden');
+        });
+
+        showLoginViewBtn.addEventListener('click', () => {
+            registerView.classList.add('hidden');
+            loginView.classList.remove('hidden');
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loadingOverlay.style.display = 'flex';
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                console.error("Error al iniciar sesión:", error);
+                showNotification("Error: " + error.message);
+                loadingOverlay.style.display = 'none';
+            }
+        });
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loadingOverlay.style.display = 'flex';
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+             try {
+                await createUserWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                console.error("Error al registrar:", error);
+                showNotification("Error: " + error.message);
+                loadingOverlay.style.display = 'none';
+            }
+        });
+
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+            } catch (error) {
+                console.error("Error al cerrar sesión:", error);
+                showNotification("No se pudo cerrar la sesión.");
+            }
+        });
+
+
+        function setupFirestoreListeners() {
+            if (!userId) return;
+            const collectionPath = `artifacts/${appId}/users/${userId}/asuntos`;
+            asuntosCollectionRef = collection(db, collectionPath);
+            
+            if (unsubscribeAsuntos) unsubscribeAsuntos();
+
+            unsubscribeAsuntos = onSnapshot(asuntosCollectionRef, (snapshot) => {
+                allAsuntos = [];
+                snapshot.forEach(doc => {
+                    allAsuntos.push({ id: doc.id, ...doc.data() });
+                });
+                populateYearSelector();
+                filterAndRenderAsuntos();
+                calculateAndRenderMonthlySummary();
+                loadingOverlay.style.display = 'none';
+            }, (error) => {
+                console.error("Error al obtener asuntos:", error);
+                showNotification("Error al cargar los datos.");
+                loadingOverlay.style.display = 'none';
+            });
+        }
+
+        function populateYearSelector() {
+            const years = new Set(allAsuntos.map(a => new Date(a.creadoEn.seconds * 1000).getFullYear()));
+            years.add(new Date().getFullYear());
+            const sortedYears = Array.from(years).sort((a, b) => b - a);
+
+            yearSelector.innerHTML = '';
+            sortedYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                if (year === selectedYear) {
+                    option.selected = true;
+                }
+                yearSelector.appendChild(option);
+            });
+        }
+
+        function renderAsuntos(asuntos, searchTerm = '') {
+            asuntosContainer.innerHTML = '';
+            if (asuntos.length === 0) {
+                asuntosContainer.innerHTML = allAsuntos.length > 0 && searchTerm
+                    ? `<p class="text-center text-gray-500">No se encontraron asuntos que coincidan con "<b>${searchTerm}</b>".</p>`
+                    : `<p class="text-center text-gray-500">No hay asuntos para el año ${selectedYear}. ¡Añade uno para empezar!</p>`;
+                return;
+            }
+
+            asuntos.sort((a, b) => (b.creadoEn?.seconds || 0) - (a.creadoEn?.seconds || 0));
+
+            asuntos.forEach(asunto => {
+                const totalProvisiones = asunto.provisiones?.reduce((sum, p) => sum + Number(p.cantidad), 0) || 0;
+                const totalGastos = asunto.gastos?.reduce((sum, g) => sum + Number(g.cantidad), 0) || 0;
+                const solicitado = Number(asunto.solicitado) || 0;
+                const pendiente = solicitado > 0 ? solicitado - totalProvisiones : 0;
+                const beneficio = totalProvisiones - totalGastos;
+                const isPaid = solicitado > 0 && totalProvisiones >= solicitado;
+                
+                const asuntoElement = document.createElement('div');
+                asuntoElement.className = 'bg-white rounded-lg shadow-md overflow-hidden';
+                asuntoElement.innerHTML = `
+                    <div class="asunto-header flex justify-between items-center p-6 cursor-pointer hover:bg-gray-50 transition-colors">
+                        <div class="asunto-nombre-wrapper flex-grow mr-4 flex items-center gap-3">
+                            ${isPaid ? `
+                                <div class="text-green-500 flex-shrink-0" title="Completamente abonado">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                                </div>` : ''}
+                            <div class="flex-grow">
+                                <h3 class="asunto-nombre-display text-xl font-bold ${isPaid ? 'text-gray-600' : 'text-blue-800'} p-1 rounded-md" title="Haz clic para editar">${asunto.nombre}</h3>
+                                <input type="text" value="${asunto.nombre}" data-id="${asunto.id}" class="asunto-nombre-input hidden w-full text-xl font-bold border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"/>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            ${asunto.driveLink ? `
+                                <a href="${asunto.driveLink}" target="_blank" class="text-gray-400 hover:text-yellow-600 p-2 z-10 relative" title="Abrir carpeta de Drive">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                                </a>
+                            ` : ''}
+                            <button class="delete-asunto-btn text-gray-400 hover:text-red-600 p-2 z-10 relative" data-id="${asunto.id}" title="Eliminar asunto">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                            <div class="toggle-icon text-gray-500 transition-transform">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="asunto-content hidden border-t">
+                      <div class="p-6">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center py-4 mb-4">
+                            <div>
+                                <p class="text-sm text-gray-500">Provisión Total</p>
+                                <p class="text-xl font-semibold text-green-600">${totalProvisiones.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Pendiente</p>
+                                <p class="text-xl font-semibold ${pendiente > 0 ? 'text-orange-600' : 'text-gray-800'}">${pendiente.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+                            </div>
+                            <div class="col-span-2 sm:col-span-1">
+                                <p class="text-sm text-gray-500">Beneficio Neto</p>
+                                <p class="text-xl font-semibold text-indigo-600">${beneficio.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+                            </div>
+                        </div>
+
+                        <!-- SECCIÓN DE PROVISIONES -->
+                        <div class="mb-6">
+                            <form class="add-provision-form space-y-3" data-id="${asunto.id}">
+                                <h4 class="font-semibold text-gray-700">Añadir Nueva Provisión</h4>
+                                <div class="flex flex-col md:flex-row gap-3">
+                                     <input type="date" name="fecha" class="w-full md:w-auto flex-grow px-3 py-2 border border-gray-300 rounded-md" required>
+                                     <input type="number" name="cantidad" placeholder="Cantidad (€)" step="0.01" class="w-full md:w-auto flex-grow px-3 py-2 border border-gray-300 rounded-md" required>
+                                     <input type="text" name="descripcion" placeholder="Descripción (opcional)" class="w-full md:w-auto flex-grow px-3 py-2 border border-gray-300 rounded-md">
+                                </div>
+                                <button type="submit" class="w-full bg-green-500 text-white font-semibold px-4 py-2 rounded-md hover:bg-green-600 transition-colors">Añadir Provisión</button>
+                            </form>
+                            <div class="provisiones-list mt-4">
+                                ${asunto.provisiones && asunto.provisiones.length > 0 ? `
+                                    <h4 class="font-semibold mb-2 text-sm text-gray-600">Historial de Provisiones:</h4>
+                                    <ul class="space-y-2">
+                                        ${asunto.provisiones.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).map(p => `
+                                            <li class="flex justify-between items-center p-2 bg-gray-50 rounded-md text-sm">
+                                                <div>
+                                                    <span class="font-medium">${new Date(p.fecha).toLocaleDateString('es-ES')}</span>
+                                                    <span class="text-gray-600 ml-2">${p.descripcion || ''}</span>
+                                                </div>
+                                                <span class="font-semibold text-gray-800">${Number(p.cantidad).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                                            </li>
+                                        `).join('')}
+                                    </ul>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- SECCIÓN DE GASTOS -->
+                        <div class="mb-6">
+                            <form class="add-gasto-form space-y-3" data-id="${asunto.id}">
+                                <h4 class="font-semibold text-gray-700">Añadir Nuevo Gasto</h4>
+                                <div class="flex flex-col md:flex-row gap-3">
+                                     <input type="date" name="fecha" class="w-full md:w-auto flex-grow px-3 py-2 border border-gray-300 rounded-md" required>
+                                     <input type="number" name="cantidad" placeholder="Cantidad (€)" step="0.01" class="w-full md:w-auto flex-grow px-3 py-2 border border-gray-300 rounded-md" required>
+                                     <input type="text" name="descripcion" placeholder="Descripción (opcional)" class="w-full md:w-auto flex-grow px-3 py-2 border border-gray-300 rounded-md">
+                                </div>
+                                <button type="submit" class="w-full bg-red-500 text-white font-semibold px-4 py-2 rounded-md hover:bg-red-600 transition-colors">Añadir Gasto</button>
+                            </form>
+                            <div class="gastos-list mt-4">
+                                 ${asunto.gastos && asunto.gastos.length > 0 ? `
+                                    <h4 class="font-semibold mb-2 text-sm text-gray-600">Historial de Gastos:</h4>
+                                    <ul class="space-y-2">
+                                        ${asunto.gastos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).map(g => `
+                                            <li class="flex justify-between items-center p-2 bg-red-50 rounded-md text-sm">
+                                                <div>
+                                                    <span class="font-medium">${new Date(g.fecha).toLocaleDateString('es-ES')}</span>
+                                                    <span class="text-gray-600 ml-2">${g.descripcion || ''}</span>
+                                                </div>
+                                                <span class="font-semibold text-red-800">-${Number(g.cantidad).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                                            </li>
+                                        `).join('')}
+                                    </ul>` : ''}
+                            </div>
+                        </div>
+
+                        <button class="details-toggle text-sm font-semibold text-blue-600 hover:underline flex items-center gap-1 w-full justify-center py-2 border-t mt-4">
+                            <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            <span>Mostrar Detalles (Solicitado y Notas)</span>
+                        </button>
+
+                        <div class="details-content mt-4 pt-4 border-t space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Total Solicitado (€)</label>
+                                    <input type="number" step="0.01" value="${asunto.solicitado || ''}" data-id="${asunto.id}" class="solicitado-input w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="0.00">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                                    <textarea data-id="${asunto.id}" class="notas-textarea w-full px-3 py-2 border border-gray-300 rounded-md" rows="3" placeholder="Añade notas aquí...">${asunto.notas || ''}</textarea>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Enlace a Google Drive</label>
+                                    <input type="url" value="${asunto.driveLink || ''}" data-id="${asunto.id}" class="drive-link-input w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="Pega aquí el enlace a la carpeta...">
+                                </div>
+                            </div>
+                        </div>
+                      </div>
+                    </div>
+                `;
+                asuntosContainer.appendChild(asuntoElement);
+            });
+        }
+        
+        function calculateAndRenderMonthlySummary() {
+            const monthlyData = {};
+            
+            const allTransactions = [];
+            allAsuntos.forEach(asunto => {
+                asunto.provisiones?.forEach(p => allTransactions.push({ ...p, type: 'income' }));
+                asunto.gastos?.forEach(g => allTransactions.push({ ...g, type: 'expense' }));
+            });
+
+            const transactionsOfTheYear = allTransactions.filter(t => t.fecha && new Date(t.fecha).getFullYear() === selectedYear);
+
+            transactionsOfTheYear.forEach(t => {
+                const date = new Date(t.fecha);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}`; // YYYY-MM format for sorting
+                if (!monthlyData[monthKey]) {
+                    monthlyData[monthKey] = {
+                        income: 0,
+                        expenses: 0,
+                        monthName: date.toLocaleString('es-ES', { month: 'long' })
+                    };
+                }
+                if (t.type === 'income') {
+                    monthlyData[monthKey].income += Number(t.cantidad);
+                } else {
+                    monthlyData[monthKey].expenses += Number(t.cantidad);
+                }
+            });
+
+            summaryContent.innerHTML = '';
+            const sortedMonthKeys = Object.keys(monthlyData).sort();
+
+            if (sortedMonthKeys.length === 0) {
+                summaryContent.innerHTML = '<p class="text-sm text-gray-500">No hay movimientos este año.</p>';
+                return;
+            }
+
+            sortedMonthKeys.forEach(key => {
+                const data = monthlyData[key];
+                const netAmount = data.income - data.expenses;
+                const amountString = netAmount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+                const textColorClass = netAmount >= 0 ? 'text-green-700' : 'text-red-700';
+                const monthDisplayName = data.monthName.charAt(0).toUpperCase() + data.monthName.slice(1);
+
+                summaryContent.innerHTML += `
+                    <div class="flex justify-between text-sm">
+                        <span class="font-medium capitalize">${monthDisplayName} ${selectedYear}</span>
+                        <span class="font-semibold ${textColorClass}">${amountString}</span>
+                    </div>`;
+            });
+        }
+
+
+        function filterAndRenderAsuntos() {
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            const filteredByYear = allAsuntos.filter(asunto => 
+                asunto.creadoEn?.seconds && new Date(asunto.creadoEn.seconds * 1000).getFullYear() === selectedYear
+            );
+            const filteredAsuntos = filteredByYear.filter(asunto =>
+                asunto.nombre.toLowerCase().includes(searchTerm)
+            );
+            renderAsuntos(filteredAsuntos, searchInput.value.trim());
+        }
+        
+        async function handleNameUpdate(input) {
+            const wrapper = input.closest('.asunto-nombre-wrapper');
+            if (!wrapper) return;
+            const display = wrapper.querySelector('.asunto-nombre-display');
+            const asuntoId = input.dataset.id;
+            const newName = input.value.trim();
+            const oldName = display.textContent.trim();
+
+            if (newName && newName !== oldName && userId) {
+                display.textContent = newName; 
+                const asuntoDocRef = doc(db, `artifacts/${appId}/users/${userId}/asuntos`, asuntoId);
+                try {
+                    await updateDoc(asuntoDocRef, { nombre: newName });
+                } catch (error) {
+                    console.error("Error al actualizar nombre:", error);
+                    showNotification("Error al cambiar el nombre.");
+                    display.textContent = oldName;
+                }
+            } else {
+                input.value = oldName;
+            }
+
+            input.classList.add('hidden');
+            display.classList.remove('hidden');
+        }
+
+        function exportDataToCSV() {
+            const asuntosDelAno = allAsuntos.filter(asunto => 
+                asunto.creadoEn?.seconds && new Date(asunto.creadoEn.seconds * 1000).getFullYear() === selectedYear
+            );
+
+            if (asuntosDelAno.length === 0) {
+                showNotification("No hay datos para exportar en el año seleccionado.");
+                return;
+            }
+
+            const escapeCSV = (str) => {
+                if (str === null || str === undefined) return '';
+                let result = String(str).replace(/\r?\n/g, ' ');
+                if (result.includes(',') || result.includes('"')) {
+                    result = '"' + result.replace(/"/g, '""') + '"';
+                }
+                return result;
+            };
+
+            const headers = [
+                "Nombre Asunto", "Total Solicitado", "Notas",
+                "Tipo Movimiento", "Fecha Movimiento", "Cantidad Movimiento", "Descripción Movimiento"
+            ];
+            
+            let csvRows = [headers.join(",")];
+
+            asuntosDelAno.forEach(asunto => {
+                const commonData = [
+                    escapeCSV(asunto.nombre),
+                    asunto.solicitado || 0,
+                    escapeCSV(asunto.notas)
+                ];
+
+                if (asunto.provisiones?.length === 0 && asunto.gastos?.length === 0) {
+                    csvRows.push([...commonData, "", "", "", ""].join(","));
+                } else {
+                    asunto.provisiones?.forEach(p => {
+                        const rowData = [
+                            ...commonData, "Provisión", p.fecha, p.cantidad, escapeCSV(p.descripcion)
+                        ];
+                        csvRows.push(rowData.join(","));
+                    });
+                    asunto.gastos?.forEach(g => {
+                        const rowData = [
+                            ...commonData, "Gasto", g.fecha, g.cantidad, escapeCSV(g.descripcion)
+                        ];
+                        csvRows.push(rowData.join(","));
+                    });
+                }
+            });
+
+            const csvContent = csvRows.join("\r\n");
+            const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `export_gestor_finanzas_${selectedYear}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showNotification("Exportación completada.", true);
+        }
+
+        addAsuntoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const nombre = asuntoNombreInput.value.trim();
+            if (nombre && userId) {
+                try {
+                    await addDoc(asuntosCollectionRef, {
+                        nombre,
+                        provisiones: [],
+                        gastos: [],
+                        notas: '',
+                        solicitado: 0,
+                        driveLink: '',
+                        creadoEn: new Date()
+                    });
+                    asuntoNombreInput.value = '';
+                } catch (error) { 
+                    console.error("Error al añadir asunto:", error); 
+                    showNotification("Error al crear el asunto.");
+                }
+            }
+        });
+
+        asuntosContainer.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (e.target.classList.contains('add-provision-form')) {
+                const form = e.target;
+                const asuntoId = form.dataset.id;
+                const nuevaProvision = {
+                    fecha: form.querySelector('input[name="fecha"]').value,
+                    cantidad: parseFloat(form.querySelector('input[name="cantidad"]').value),
+                    descripcion: form.querySelector('input[name="descripcion"]').value
+                };
+
+                if (nuevaProvision.fecha && !isNaN(nuevaProvision.cantidad) && asuntoId && userId) {
+                    const asuntoDocRef = doc(db, `artifacts/${appId}/users/${userId}/asuntos`, asuntoId);
+                    try {
+                        await updateDoc(asuntoDocRef, { provisiones: arrayUnion(nuevaProvision) });
+                        form.reset();
+                    } catch (error) { 
+                        console.error("Error al añadir provisión:", error); 
+                        showNotification("Error al añadir la provisión.");
+                    }
+                }
+            }
+
+            if (e.target.classList.contains('add-gasto-form')) {
+                const form = e.target;
+                const asuntoId = form.dataset.id;
+                const nuevoGasto = {
+                    fecha: form.querySelector('input[name="fecha"]').value,
+                    cantidad: parseFloat(form.querySelector('input[name="cantidad"]').value),
+                    descripcion: form.querySelector('input[name="descripcion"]').value
+                };
+
+                if (nuevoGasto.fecha && !isNaN(nuevoGasto.cantidad) && asuntoId && userId) {
+                    const asuntoDocRef = doc(db, `artifacts/${appId}/users/${userId}/asuntos`, asuntoId);
+                    try {
+                        await updateDoc(asuntoDocRef, { gastos: arrayUnion(nuevoGasto) });
+                        form.reset();
+                    } catch (error) { 
+                        console.error("Error al añadir gasto:", error); 
+                        showNotification("Error al añadir el gasto.");
+                    }
+                }
+            }
+        });
+
+        asuntosContainer.addEventListener('focusout', async (e) => {
+            const { target } = e;
+            const isSolicitado = target.classList.contains('solicitado-input');
+            const isNotas = target.classList.contains('notas-textarea');
+            const isDriveLink = target.classList.contains('drive-link-input');
+
+            if ((isSolicitado || isNotas || isDriveLink) && target.dataset.id && userId) {
+                const asuntoDocRef = doc(db, `artifacts/${appId}/users/${userId}/asuntos`, target.dataset.id);
+                try {
+                    let fieldToUpdate;
+                    if(isSolicitado) fieldToUpdate = { solicitado: Number(target.value) };
+                    else if (isNotas) fieldToUpdate = { notas: target.value };
+                    else if (isDriveLink) fieldToUpdate = { driveLink: target.value };
+                    
+                    if (fieldToUpdate) {
+                        await updateDoc(asuntoDocRef, fieldToUpdate);
+                    }
+                } catch (error) { 
+                    console.error("Error al actualizar:", error); 
+                    showNotification("Error al guardar los cambios.");
+                }
+            }
+        });
+        
+        asuntosContainer.addEventListener('click', (e) => {
+            const toggle = e.target.closest('.details-toggle');
+            if (toggle) {
+                const content = toggle.nextElementSibling;
+                const icon = toggle.querySelector('svg');
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                    toggle.querySelector('span').textContent = 'Mostrar Detalles (Solicitado y Notas)';
+                    icon.style.transform = 'rotate(0deg)';
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                    toggle.querySelector('span').textContent = 'Ocultar Detalles (Solicitado y Notas)';
+                    icon.style.transform = 'rotate(180deg)';
+                }
+            }
+
+            const header = e.target.closest('.asunto-header');
+            if (header) {
+                if (e.target.closest('.asunto-nombre-wrapper') || e.target.closest('.delete-asunto-btn') || e.target.closest('.drive-link-btn')) {
+                     if (e.target.classList.contains('asunto-nombre-display')) {
+                        const wrapper = e.target.closest('.asunto-nombre-wrapper');
+                        const display = wrapper.querySelector('.asunto-nombre-display');
+                        const input = wrapper.querySelector('.asunto-nombre-input');
+
+                        display.classList.add('hidden');
+                        input.classList.remove('hidden');
+                        input.focus();
+                        input.select();
+                    }
+                    return;
+                }
+
+                const content = header.nextElementSibling;
+                const icon = header.querySelector('.toggle-icon');
+                content.classList.toggle('hidden');
+                icon.classList.toggle('rotate-180');
+            }
+
+            const deleteBtn = e.target.closest('.delete-asunto-btn');
+            if (deleteBtn) {
+                asuntoIdToDelete = deleteBtn.dataset.id;
+                deleteModal.classList.remove('hidden');
+            }
+        });
+
+        asuntosContainer.addEventListener('focusout', async (e) => {
+            if (e.target.classList.contains('asunto-nombre-input')) {
+                handleNameUpdate(e.target);
+            }
+        });
+        
+        asuntosContainer.addEventListener('keydown', (e) => {
+            if (e.target.classList.contains('asunto-nombre-input')) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleNameUpdate(e.target);
+                } else if (e.key === 'Escape') {
+                    const wrapper = e.target.closest('.asunto-nombre-wrapper');
+                    const display = wrapper.querySelector('.asunto-nombre-display');
+                    const input = e.target;
+                    
+                    input.value = display.textContent.trim();
+                    input.classList.add('hidden');
+                    display.classList.remove('hidden');
+                }
+            }
+        });
+
+        searchInput.addEventListener('input', filterAndRenderAsuntos);
+        yearSelector.addEventListener('change', (e) => {
+            selectedYear = parseInt(e.target.value);
+            filterAndRenderAsuntos();
+            calculateAndRenderMonthlySummary();
+        });
+        toggleSummaryBtn.addEventListener('click', () => {
+            summaryContent.classList.toggle('hidden');
+            toggleSummaryBtn.textContent = summaryContent.classList.contains('hidden') ? 'Mostrar' : 'Ocultar';
+        });
+
+        exportCsvBtn.addEventListener('click', exportDataToCSV);
+
+        cancelDeleteBtn.addEventListener('click', () => {
+            deleteModal.classList.add('hidden');
+            asuntoIdToDelete = null;
+        });
+
+        confirmDeleteBtn.addEventListener('click', async () => {
+            if (asuntoIdToDelete && userId) {
+                const asuntoDocRef = doc(db, `artifacts/${appId}/users/${userId}/asuntos`, asuntoIdToDelete);
+                try {
+                    await deleteDoc(asuntoDocRef);
+                    showNotification("Asunto eliminado correctamente.", true);
+                } catch (error) {
+                    console.error("Error al eliminar asunto:", error);
+                    showNotification("Error al eliminar el asunto.");
+                } finally {
+                    deleteModal.classList.add('hidden');
+                    asuntoIdToDelete = null;
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
+
+
